@@ -35,23 +35,23 @@ def process_data(message):
         user_data_dict[user_id].append(data)
 
         # Если введены не все данные, запрашиваем следующие
-        if len(user_data_dict[user_id]) < 6:
-            if len(user_data_dict[user_id]) == 0:
+        if len(user_data_dict[user_id]) <= 5:
+            if len(user_data_dict[user_id]) == 1:
                 request_data(message, "Введите ваше Имя:")
             elif len(user_data_dict[user_id]) == 1:
                 request_data(message, "Введите ваше Отчество:")
-            elif len(user_data_dict[user_id]) == 2:
-                request_data(message, "Введите вашу Фамилию:")
             elif len(user_data_dict[user_id]) == 3:
-                request_data(message, "Введите ваш Адрес:")
+                request_data(message, "Введите вашу Фамилию:")
             elif len(user_data_dict[user_id]) == 4:
+                request_data(message, "Введите ваш Адрес:")
+            elif len(user_data_dict[user_id]) == 5:
                 request_data(message, "Введите ваш Номер телефона:")
             return
 
         # Формируем сообщение для проверки данных
-        check_message = f"Вас зовут {user_data_dict[user_id][0]} {user_data_dict[user_id][1]} {user_data_dict[user_id][2]}," \
-                        f" вы проживаете по адресу {user_data_dict[user_id][3]}," \
-                        f" с вами можно связаться по номеру {user_data_dict[user_id][4]}? Да/Нет"
+        check_message = f"Вас зовут {user_data_dict[user_id][1]} {user_data_dict[user_id][2]} {user_data_dict[user_id][3]}," \
+                        f" вы проживаете по адресу {user_data_dict[user_id][4]}," \
+                        f" с вами можно связаться по номеру {user_data_dict[user_id][5]}? Да/Нет"
 
         # Отправляем сообщение с проверкой данных и добавляем кнопки "Да" и "Нет" меньшего размера
         markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
@@ -61,8 +61,19 @@ def process_data(message):
         # Устанавливаем флаг, что пользователь находится в процессе регистрации
         is_registering = True
 
+    except ValueError as ve:
+        error_message = f"Произошла ошибка: {str(ve)}"
+        print(f"Error handling message: {error_message}")
+        if user_id:
+            bot.send_message(user_id, error_message)
     except Exception as e:
-        bot.send_message(user_id, f"Произошла ошибка: {e}")
+        error_message = f"Произошла ошибка: {str(e)}"
+        print(f"Error handling message: {error_message}")
+        if user_id:
+            bot.send_message(user_id, error_message)
+
+
+
 
 # Функция для очистки временных данных пользователя
 def clear_temp_data(user_id):
@@ -100,25 +111,29 @@ def start_registration(message):
 @bot.message_handler(func=lambda message: message.text in ['Да', 'Нет'])
 def check_data(message):
     global is_registering
-    user_id = message.from_user.id
-    answer = message.text
-
     if is_registering:
-        if answer == 'Да':
-            # Если данные подтверждены пользователем, добавляем пользователя в базу данных
-            db.add_user(user_id, *user_data_dict[user_id])
-            bot.send_message(user_id, "Регистрация успешно завершена!")
-            # Очищаем временные данные пользователя
-            clear_temp_data(user_id)
-            # Сбрасываем флаг процесса регистрации
-            is_registering = False
-        elif answer == 'Нет':
-            # Если пользователь отказывается от введенных данных, начинаем регистрацию заново
-            clear_temp_data(user_id)
+        # Проверяем, что пользователь в процессе регистрации
+        if message.text == 'Да':
+            if message.from_user.id in user_data_dict:
+                data = user_data_dict[message.from_user.id]
+                db.add_user(*data)
+                del user_data_dict[message.from_user.id]
+                bot.send_message(message.chat.id, "Регистрация успешно завершена!")
+                is_registering = False
+            else:
+                bot.send_message(message.chat.id, "Данные пользователя не найдены во временной памяти")
+        elif message.text == 'Нет':
+            # Пользователь отказался от введенных данных, начинаем регистрацию заново
+            clear_temp_data(message.from_user.id)
             start_registration(message)
     else:
-        # Если пользователь не находится в процессе регистрации, сообщаем об этом
-        bot.send_message(user_id, "Я не понимаю вас, вы не проходите регистрацию!")
+        # Пользователь не находится в процессе регистрации
+        bot.send_message(message.chat.id, "Я не понимаю вас, вы не проходите регистрацию!")
+
+
+@bot.message_handler(content_types=['photo', 'video', 'audio', 'document', 'sticker'])
+def handle_media(message):
+    bot.send_message(message.chat.id, "Извините, но данные должны быть в текстовом или числовом формате.")
 
 # Запускаем бота
 bot.polling()

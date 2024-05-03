@@ -9,6 +9,9 @@ db = BotDB('Hospital.db')
 # Словарь для хранения временных данных пользователя
 user_data_dict = {}
 
+# Словарь для хранения состояния запроса данных пользователя
+user_data_state = {}
+
 # Флаг, указывающий на то, проходит ли пользователь регистрацию
 is_registering = False
 
@@ -20,57 +23,75 @@ def request_data(message, text):
 # Функция для обработки ввода данных пользователем
 def process_data(message):
     global is_registering
-    try:
-        # Получаем данные пользователя
-        user_id = message.from_user.id
-        data = message.text.strip()
+    # Получаем данные пользователя
+    user_id = message.from_user.id
 
-        #if user_id in user_data_dict:
-            #bot.reply_to(message, "Вы уже зарегистрированы!")
-            #return
+    if message.content_type == 'text':
+        try:
+            data = message.text.strip()
+
+            # Получаем текущее состояние запроса данных пользователя
+            state = user_data_state.get(user_id, 0)
+
+            # Сохраняем данные пользователя
+            if user_id not in user_data_dict:
+                user_data_dict[user_id] = []
+            user_data_dict[user_id].append(data)
             
-        # Сохраняем данные пользователя
-        if user_id not in user_data_dict:
-            user_data_dict[user_id] = []
-        user_data_dict[user_id].append(data)
+            # Если введены не все данные, запрашиваем следующие
+            if len(user_data_dict[user_id]) <= 5:
+                if state == 0:
+                    request_data(message, "Введите ваше Имя:")
+                    user_data_state[user_id] = 1
+                elif state == 1:
+                    request_data(message, "Введите ваше Отчество:")
+                    user_data_state[user_id] = 2
+                elif state == 2:
+                    request_data(message, "Введите вашу Фамилию:")
+                    user_data_state[user_id] = 3
+                elif state == 3:
+                    request_data(message, "Введите ваш Адрес:")
+                    user_data_state[user_id] = 4
+                elif state == 4:
+                    request_data(message, "Введите ваш Номер телефона:")
+                    user_data_state[user_id] = 5
+                return
+            
+            # Формируем сообщение для проверки данных
+            check_message = f"Вас зовут {user_data_dict[user_id][1]} {user_data_dict[user_id][2]} {user_data_dict[user_id][3]}," \
+                f" вы проживаете по адресу {user_data_dict[user_id][4]}," \
+                    f" с вами можно связаться по номеру {user_data_dict[user_id][5]}? Да/Нет"
+            
+            # Отправляем сообщение с проверкой данных и добавляем кнопки "Да" и "Нет" меньшего размера
+            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            markup.add(types.KeyboardButton('Да'), types.KeyboardButton('Нет'))
+            bot.send_message(user_id, check_message, reply_markup=markup)
 
-        # Если введены не все данные, запрашиваем следующие
-        if len(user_data_dict[user_id]) <= 5:
-            if len(user_data_dict[user_id]) == 1:
+            # Устанавливаем флаг, что пользователь находится в процессе регистрации
+            is_registering = True
+
+        except Exception as e:
+            error_message = f"Произошла ошибка: {str(e)}"
+            print(f"Error handling message: {error_message}")
+            if user_id:
+                bot.send_message(user_id, error_message)
+
+    else: 
+        # Если сообщение не текстовое, сообщаем пользователю об ошибке
+        bot.send_message(user_id, "Извините, данные должны быть в текстовом или числовом формате.")
+
+        if user_id in user_data_state:
+            state = user_data_state[user_id]
+            if state == 0:
                 request_data(message, "Введите ваше Имя:")
-            elif len(user_data_dict[user_id]) == 1:
+            elif state == 1:
                 request_data(message, "Введите ваше Отчество:")
-            elif len(user_data_dict[user_id]) == 3:
+            elif state == 2:
                 request_data(message, "Введите вашу Фамилию:")
-            elif len(user_data_dict[user_id]) == 4:
+            elif state == 3:
                 request_data(message, "Введите ваш Адрес:")
-            elif len(user_data_dict[user_id]) == 5:
+            elif state == 4:
                 request_data(message, "Введите ваш Номер телефона:")
-            return
-
-        # Формируем сообщение для проверки данных
-        check_message = f"Вас зовут {user_data_dict[user_id][1]} {user_data_dict[user_id][2]} {user_data_dict[user_id][3]}," \
-                        f" вы проживаете по адресу {user_data_dict[user_id][4]}," \
-                        f" с вами можно связаться по номеру {user_data_dict[user_id][5]}? Да/Нет"
-
-        # Отправляем сообщение с проверкой данных и добавляем кнопки "Да" и "Нет" меньшего размера
-        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-        markup.add(types.KeyboardButton('Да'), types.KeyboardButton('Нет'))
-        bot.send_message(user_id, check_message, reply_markup=markup)
-
-        # Устанавливаем флаг, что пользователь находится в процессе регистрации
-        is_registering = True
-
-    except ValueError as ve:
-        error_message = f"Произошла ошибка: {str(ve)}"
-        print(f"Error handling message: {error_message}")
-        if user_id:
-            bot.send_message(user_id, error_message)
-    except Exception as e:
-        error_message = f"Произошла ошибка: {str(e)}"
-        print(f"Error handling message: {error_message}")
-        if user_id:
-            bot.send_message(user_id, error_message)
 
 
 
@@ -130,10 +151,6 @@ def check_data(message):
         # Пользователь не находится в процессе регистрации
         bot.send_message(message.chat.id, "Я не понимаю вас, вы не проходите регистрацию!")
 
-
-@bot.message_handler(content_types=['photo', 'video', 'audio', 'document', 'sticker'])
-def handle_media(message):
-    bot.send_message(message.chat.id, "Извините, но данные должны быть в текстовом или числовом формате.")
 
 # Запускаем бота
 bot.polling()

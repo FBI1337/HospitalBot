@@ -20,6 +20,11 @@ def request_data(message, text):
     bot.send_message(message.chat.id, text)
     bot.register_next_step_handler(message, process_data)
 
+def is_valid_phone_number(phone_number):
+    return phone_number.isdigit()
+
+
+
 # Функция для обработки ввода данных пользователем
 def process_data(message):
     global is_registering
@@ -39,7 +44,7 @@ def process_data(message):
             user_data_dict[user_id].append(data)
             
             # Если введены не все данные, запрашиваем следующие
-            if len(user_data_dict[user_id]) <= 5:
+            if len(user_data_dict[user_id]) <= 6:
                 if state == 0:
                     request_data(message, "Введите ваше Имя:")
                     user_data_state[user_id] = 1
@@ -53,9 +58,12 @@ def process_data(message):
                     request_data(message, "Введите ваш Адрес:")
                     user_data_state[user_id] = 4
                 elif state == 4:
-                    request_data(message, "Введите ваш Номер телефона:")
-                    user_data_state[user_id] = 5
-                return
+                    if is_valid_phone_number(user_data_dict[user_id][-1]):
+                        request_data(message, "Введите ваш Номер телефона:")
+                        user_data_state[user_id] = 5
+                    else:
+                        bot.send_message(user_id, "Номер телефона должен состоять только из цифр. Попробуйте еще раз.")
+                        return
             
             # Формируем сообщение для проверки данных
             check_message = f"Вас зовут {user_data_dict[user_id][1]} {user_data_dict[user_id][2]} {user_data_dict[user_id][3]}," \
@@ -82,16 +90,17 @@ def process_data(message):
 
         if user_id in user_data_state:
             state = user_data_state[user_id]
-            if state == 0:
+            if state == 1:
                 request_data(message, "Введите ваше Имя:")
-            elif state == 1:
-                request_data(message, "Введите ваше Отчество:")
             elif state == 2:
-                request_data(message, "Введите вашу Фамилию:")
+                request_data(message, "Введите ваше Отчество:")
             elif state == 3:
-                request_data(message, "Введите ваш Адрес:")
+                request_data(message, "Введите вашу Фамилия:")
             elif state == 4:
+                request_data(message, "Введите ваш Адресс:")
+            elif state == 5:
                 request_data(message, "Введите ваш Номер телефона:")
+
 
 
 

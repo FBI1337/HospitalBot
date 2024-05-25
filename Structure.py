@@ -103,8 +103,25 @@ def register_handlers(bot):
             return
         
         user_data[user_id]['address'] = message.text
+        bot.send_message(message.chat.id, "Введите ваш номер полиса:")
+        bot.register_next_step_handler(message, process_polis_number_step)
+        
+        
+    def process_polis_number_step(message):
+        if not handele_all_message(message):
+            bot.register_next_step_handler(message, process_polis_number_step)
+            return
+        user_id = message.from_user.id
+        polis_number = message.text
+        
+        if not is_valid_polis_number_format(polis_number):
+            msg = bot.send_message(message.chat.id, "Номер полиса должен содержать только цифры. Попробуйте снова:")
+            bot.register_next_step_handler(msg, process_polis_number_step)
+            return
+        user_data[user_id]['polis_number'] = polis_number
         bot.send_message(message.chat.id, "Введите ваш номер телефона: (+79117990881)")
         bot.register_next_step_handler(message, process_phone_number_step)
+        
 
     def process_phone_number_step(message):
         if not handele_all_message(message):
@@ -125,7 +142,10 @@ def register_handlers(bot):
 
     def save_user_data(user_id):
         user = user_data[user_id]
-        add_user(user_id, user['name'], user['surname'], user['address'], user['phone_number'])        
+        add_user(user_id, user['name'], user['surname'], user['address'], user['polis_number'], user['phone_number'])
+        
+    def is_valid_polis_number_format(polis_number):
+        return bool(re.match("^[0-9]{16,}$", polis_number))     
         
     def is_valid_phone_number_format(phone_number):
         phone_number.isdigit

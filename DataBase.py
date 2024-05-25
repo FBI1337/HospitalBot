@@ -20,6 +20,7 @@ def create_table_if_not_exists():
         name NVARCHAR(100),
         surname NVARCHAR(100),
         address NVARCHAR(255),
+        polis_number BIGINT,
         phone_number BIGINT,
         join_date  DATETIME
     )
@@ -27,13 +28,13 @@ def create_table_if_not_exists():
     conn.commit()
     conn.close()
 
-def add_user(user_id, name, surname, address, phone_number):
+def add_user(user_id, name, surname, address, polis_number, phone_number):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO Users (user_id, name, surname, address, phone_number, join_date)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (user_id, name, surname, address, phone_number, datetime.now()))
+    INSERT INTO Users (user_id, name, surname, address, polis_number, phone_number, join_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, name, surname, address, polis_number, phone_number, datetime.now()))
     conn.commit()
     conn.close()
 

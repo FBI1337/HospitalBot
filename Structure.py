@@ -1,165 +1,143 @@
-import telebot
+import re
 from telebot import types
-from DataBase import BotDB
+from database import add_user, user_exists
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderUnavailable, GeocoderTimedOut
 
-# Инициализируем бота
-bot = telebot.TeleBot("7000708851:AAHy3Kx7Vw8GKB_HbLPgWyuNEjYZRmKgQAw")
-db = BotDB('Hospital.db')
+user_data = {}
 
-# Словарь для хранения временных данных пользователя
-user_data_dict = {}
+def register_handlers(bot):
+    @bot.message_handler(commands=['start'])
+    def handle_start(message):
+        send_welcome(bot, message)
 
-# Словарь для хранения состояния запроса данных пользователя
-user_data_state = {}
+    @bot.message_handler(func=lambda message: message.text == 'Регистрация')
+    def handle_registration(message):
+        user_id = message.from_user.id
+        if user_exists(user_id):
+            bot.send_message(message.chat.id, "Вы уже зарегестрированны!")
+        else: 
+            bot.send_message(message.chat.id, "Начался процесс регистрации.")
+            bot.send_message(message.chat.id, "Введите свое имя:")
+            bot.register_next_step_handler(message, process_name_step)
 
-# Флаг, указывающий на то, проходит ли пользователь регистрацию
-is_registering = False
+    @bot.message_handler(func=lambda message: message.text == 'Врачи')
+    def handle_doctors(message):
+        bot.send_message(message.chat.id, "Раздел Врачи пока недоступен.")
 
-# Функция для запроса данных у пользователя
-def request_data(message, text):
-    bot.send_message(message.chat.id, text)
-    bot.register_next_step_handler(message, process_data)
+    @bot.message_handler(func=lambda message: message.text == 'Запись к врачу')
+    def handle_appointment(message):
+        bot.send_message(message.chat.id, "Раздел Запись к врачу пока недоступен.")
 
-def is_valid_phone_number(phone_number):
-    return phone_number.isdigit()
+    def send_welcome(bot, message):
+        markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+        registration_button = types.KeyboardButton('Регистрация')
+        doctors_button = types.KeyboardButton('Врачи')
+        appointment_button = types.KeyboardButton('Запись к врачу')
+        markup.add(registration_button, doctors_button, appointment_button)
 
+        bot.send_message(message.chat.id, "Добро пожаловать! Пожалуйста, выберите действие:", reply_markup=markup)
+        
+    def send_message(bot, chat_id, text):
+        bot.send_message(chat_id, text)
+    
+    def is_valid_text(text):
+        return bool(re.match("^[A-Za-zА-Яа-яЁё ]{2,}$", text))
+    
+    
+    def handele_all_message(message):
+        if message.content_type != 'text':
+            send_error_message(message)
+            return False
+        return True
+    
+    def send_error_message(message):
+        bot.send_message(message.chat.id, "Извините, я понимаю только текстовые сообщения.")
+        
+    def process_name_step(message):
+        if not handele_all_message(message):
+            bot.register_next_step_handler(message, process_name_step)
+            return
+        
+        user_id = message.from_user.id
+        if not is_valid_text(message.text):
+            msg = bot.send_message(message.chat.id, "Имя должно содержать только буквы. Попробуйте снова:")
+            bot.register_next_step_handler(msg, process_name_step)
+            return
+        
+        user_data[user_id] = {'name': message.text}
+        bot.send_message(message.chat.id, "Введите вашу фамилию:")
+        bot.register_next_step_handler(message, process_surname_step)
 
+    def process_surname_step(message):
+        if not handele_all_message(message):
+            bot.register_next_step_handler(message, process_surname_step)
+            return
+        
+        user_id = message.from_user.id
+        if not is_valid_text(message.text):
+            msg = bot.send_message(message.chat.id, "Фамилия должна содержать только буквы. Попробуйте снова:")
+            bot.register_next_step_handler(msg, process_surname_step)
+            return
+        
+        user_data[user_id]['surname'] = message.text
+        bot.send_message(message.chat.id, "Введите ваш адрес: (4-я линния д.21)")
+        bot.register_next_step_handler(message, process_address_step)
 
-# Функция для обработки ввода данных пользователем
-def process_data(message):
-    global is_registering
-    # Получаем данные пользователя
-    user_id = message.from_user.id
+    def process_address_step(message):
+        if not handele_all_message(message):
+            bot.register_next_step_handler(message, process_address_step)
+            return
+        
+        user_id = message.from_user.id
+        address = message.text
+        
+        if not is_valid_address_format(address):
+            msg = bot.send_message(message.chat.id, "Адрес должен содержать буквы, цифры и допустимые спецсимволы (/ , .). Попробуйте снова:")
+            bot.register_next_step_handler(msg, process_address_step)
+            return
+              
+        if not verify_address(address):
+            msg = bot.send_message(message.chat.id,  "Адрес не найден. Повторите снова:")
+            bot.register_next_step_handler(msg, process_address_step)
+            return
+        
+        user_data[user_id]['address'] = message.text
+        bot.send_message(message.chat.id, "Введите ваш номер телефона: (+79117990881)")
+        bot.register_next_step_handler(message, process_phone_number_step)
 
-    if message.content_type == 'text':
+    def process_phone_number_step(message):
+        if not handele_all_message(message):
+            bot.register_next_step_handler(message, process_phone_number_step)
+            return
+        
+        user_id = message.from_user.id
+        phone_number = message.text
+
+        if not is_valid_phone_number_format(phone_number):
+            msg = bot.send_message(message.chat.id, "Номер телефона должен содержать только цифры. Попробуйте снова:")
+            bot.register_next_step_handler(msg, process_phone_number_step)
+            return
+
+        user_data[user_id]['phone_number'] = int(phone_number)
+        save_user_data(user_id)
+        bot.send_message(message.chat.id, "Регистрация завершена!")
+
+    def save_user_data(user_id):
+        user = user_data[user_id]
+        add_user(user_id, user['name'], user['surname'], user['address'], user['phone_number'])        
+        
+    def is_valid_phone_number_format(phone_number):
+        phone_number.isdigit
+        return bool(re.match("^[0-9+]{11,}$", phone_number))
+    
+    def is_valid_address_format(address):
+        return bool(re.match("^[A-Za-z0-9А-Яа-яЁё /,.-]{5,}$", address))
+    
+    def verify_address(address):
+        geolocator = Nominatim(user_agent="hospital_bot", timeout=10)
         try:
-            data = message.text.strip()
-
-            # Получаем текущее состояние запроса данных пользователя
-            state = user_data_state.get(user_id, 0)
-
-            # Сохраняем данные пользователя
-            if user_id not in user_data_dict:
-                user_data_dict[user_id] = []
-            user_data_dict[user_id].append(data)
-            
-            # Если введены не все данные, запрашиваем следующие
-            if len(user_data_dict[user_id]) <= 6:
-                if state == 0:
-                    request_data(message, "Введите ваше Имя:")
-                    user_data_state[user_id] = 1
-                elif state == 1:
-                    request_data(message, "Введите ваше Отчество:")
-                    user_data_state[user_id] = 2
-                elif state == 2:
-                    request_data(message, "Введите вашу Фамилию:")
-                    user_data_state[user_id] = 3
-                elif state == 3:
-                    request_data(message, "Введите ваш Адрес:")
-                    user_data_state[user_id] = 4
-                elif state == 4:
-                    if is_valid_phone_number(user_data_dict[user_id][-1]):
-                        request_data(message, "Введите ваш Номер телефона:")
-                        user_data_state[user_id] = 5
-                    else:
-                        bot.send_message(user_id, "Номер телефона должен состоять только из цифр. Попробуйте еще раз.")
-                        return
-            
-            # Формируем сообщение для проверки данных
-            check_message = f"Вас зовут {user_data_dict[user_id][1]} {user_data_dict[user_id][2]} {user_data_dict[user_id][3]}," \
-                f" вы проживаете по адресу {user_data_dict[user_id][4]}," \
-                    f" с вами можно связаться по номеру {user_data_dict[user_id][5]}? Да/Нет"
-            
-            # Отправляем сообщение с проверкой данных и добавляем кнопки "Да" и "Нет" меньшего размера
-            markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-            markup.add(types.KeyboardButton('Да'), types.KeyboardButton('Нет'))
-            bot.send_message(user_id, check_message, reply_markup=markup)
-
-            # Устанавливаем флаг, что пользователь находится в процессе регистрации
-            is_registering = True
-
-        except Exception as e:
-            error_message = f"Произошла ошибка: {str(e)}"
-            print(f"Error handling message: {error_message}")
-            if user_id:
-                bot.send_message(user_id, error_message)
-
-    else: 
-        # Если сообщение не текстовое, сообщаем пользователю об ошибке
-        bot.send_message(user_id, "Извините, данные должны быть в текстовом или числовом формате.")
-
-        if user_id in user_data_state:
-            state = user_data_state[user_id]
-            if state == 1:
-                request_data(message, "Введите ваше Имя:")
-            elif state == 2:
-                request_data(message, "Введите ваше Отчество:")
-            elif state == 3:
-                request_data(message, "Введите вашу Фамилия:")
-            elif state == 4:
-                request_data(message, "Введите ваш Адресс:")
-            elif state == 5:
-                request_data(message, "Введите ваш Номер телефона:")
-
-
-
-
-
-# Функция для очистки временных данных пользователя
-def clear_temp_data(user_id):
-    if user_id in user_data_dict:
-        del user_data_dict[user_id]
-
-# Обработчик команды /start
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    global is_registering
-    # Создаем клавиатуру
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    button = types.KeyboardButton(text="Регистрация")
-    keyboard.add(button)
-
-    bot.reply_to(message, "Привет! Для регистрации нажмите кнопку 'Регистрация'", reply_markup=keyboard)
-    # Сбрасываем флаг процесса регистрации
-    is_registering = False
-
-# Обработчик нажатия на кнопку "Регистрация"
-@bot.message_handler(func=lambda message: message.text == "Регистрация")
-def start_registration(message):
-    global is_registering
-    if not is_registering:
-        # Очищаем временные данные перед началом регистрации
-        clear_temp_data(message.from_user.id)
-        # Убираем кнопку "Регистрация" после нажатия
-        bot.send_message(message.chat.id, "Вы начали процесс регистрации.", reply_markup=types.ReplyKeyboardRemove())
-        process_data(message)
-    else:
-        # Если пользователь уже в процессе регистрации, игнорируем нажатие кнопки
-        bot.send_message(message.chat.id, "Вы уже проходите регистрацию!")
-
-# Обработчик нажатия на кнопку "Да" или "Нет"
-@bot.message_handler(func=lambda message: message.text in ['Да', 'Нет'])
-def check_data(message):
-    global is_registering
-    if is_registering:
-        # Проверяем, что пользователь в процессе регистрации
-        if message.text == 'Да':
-            if message.from_user.id in user_data_dict:
-                data = user_data_dict[message.from_user.id]
-                db.add_user(*data)
-                del user_data_dict[message.from_user.id]
-                bot.send_message(message.chat.id, "Регистрация успешно завершена!")
-                is_registering = False
-            else:
-                bot.send_message(message.chat.id, "Данные пользователя не найдены во временной памяти")
-        elif message.text == 'Нет':
-            # Пользователь отказался от введенных данных, начинаем регистрацию заново
-            clear_temp_data(message.from_user.id)
-            start_registration(message)
-    else:
-        # Пользователь не находится в процессе регистрации
-        bot.send_message(message.chat.id, "Я не понимаю вас, вы не проходите регистрацию!")
-
-
-# Запускаем бота
-bot.polling()
+            location = geolocator.geocode(address)
+            return location is not None
+        except (GeocoderUnavailable, GeocoderTimedOut):
+            return False

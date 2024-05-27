@@ -103,7 +103,7 @@ def register_handlers(bot):
             return
         
         user_data[user_id]['address'] = message.text
-        bot.send_message(message.chat.id, "Введите ваш номер полиса:")
+        bot.send_message(message.chat.id, "Введите ваш номер полиса: (16 цифр)")
         bot.register_next_step_handler(message, process_polis_number_step)
         
         

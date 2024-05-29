@@ -5,3 +5,6 @@ DB_CONFIG = {
     'username': 'FBI',
     'password': 'PavelDiver1',
 }
+
+ADMIN_USERS = [6324774093]
+admin_password = "PavelDiver1"

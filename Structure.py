@@ -1,16 +1,20 @@
 import re
 from telebot import types
 from database import add_user, user_exists, get_doctors
+from config import ADMIN_USERS
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderUnavailable, GeocoderTimedOut
 
 user_data = {}
 
+
 def register_handlers(bot):
     @bot.message_handler(commands=['start'])
     def handle_start(message):
         send_welcome(bot, message)
+        
 
+            
     @bot.message_handler(func=lambda message: message.text == 'Регистрация')
     def handle_registration(message):
         user_id = message.from_user.id
@@ -43,6 +47,11 @@ def register_handlers(bot):
     @bot.message_handler(func=lambda message: message.text == 'Запись к врачу')
     def handle_appointment(message):
         bot.send_message(message.chat.id, "Раздел Запись к врачу пока недоступен.")
+        
+        
+        
+        
+
 
     def send_welcome(bot, message):
         markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)

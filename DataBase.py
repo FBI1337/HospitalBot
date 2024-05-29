@@ -54,5 +54,14 @@ def get_doctors():
     conn.close()
     return doctors
 
+def get_users():
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, name, surname, address, polis_number, phone_number, join_date FROM Users")
+        users = cursor.fetchall()
+        conn.close()
+        return users
+
+
 # Создаем таблицу при запуске
 create_table_if_not_exists()

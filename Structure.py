@@ -1,6 +1,6 @@
 import re
 from telebot import types
-from database import add_user, user_exists
+from database import add_user, user_exists, get_doctors
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderUnavailable, GeocoderTimedOut
 
@@ -15,7 +15,7 @@ def register_handlers(bot):
     def handle_registration(message):
         user_id = message.from_user.id
         if user_exists(user_id):
-            bot.send_message(message.chat.id, "Вы уже зарегестрированны!")
+            bot.send_message(message.chat.id, "Вы уже зарегистрированы!")
         else: 
             bot.send_message(message.chat.id, "Начался процесс регистрации.")
             bot.send_message(message.chat.id, "Введите свое имя:")
@@ -23,7 +23,22 @@ def register_handlers(bot):
 
     @bot.message_handler(func=lambda message: message.text == 'Врачи')
     def handle_doctors(message):
-        bot.send_message(message.chat.id, "Раздел Врачи пока недоступен.")
+        doctors = get_doctors()
+        if not doctors:
+            bot.send_message(message.chat.id, "В данный момент нет доступных врачей.")
+            return
+
+        response = "Доступные врачи:\n\n"
+        for doctor in doctors:
+            response += (
+                f"Имя: {doctor[0]}\n"
+                f"Фамилия: {doctor[1]}\n"
+                f"Специализация: {doctor[2]}\n"
+                f"Кабинет: {doctor[3]}\n"
+                f"Номер телефона: {doctor[4]}\n\n"
+            )
+        
+        bot.send_message(message.chat.id, response)
 
     @bot.message_handler(func=lambda message: message.text == 'Запись к врачу')
     def handle_appointment(message):
@@ -44,8 +59,7 @@ def register_handlers(bot):
     def is_valid_text(text):
         return bool(re.match("^[A-Za-zА-Яа-яЁё ]{2,}$", text))
     
-    
-    def handele_all_message(message):
+    def handle_all_message(message):
         if message.content_type != 'text':
             send_error_message(message)
             return False
@@ -55,7 +69,7 @@ def register_handlers(bot):
         bot.send_message(message.chat.id, "Извините, я понимаю только текстовые сообщения.")
         
     def process_name_step(message):
-        if not handele_all_message(message):
+        if not handle_all_message(message):
             bot.register_next_step_handler(message, process_name_step)
             return
         
@@ -70,7 +84,7 @@ def register_handlers(bot):
         bot.register_next_step_handler(message, process_surname_step)
 
     def process_surname_step(message):
-        if not handele_all_message(message):
+        if not handle_all_message(message):
             bot.register_next_step_handler(message, process_surname_step)
             return
         
@@ -81,11 +95,11 @@ def register_handlers(bot):
             return
         
         user_data[user_id]['surname'] = message.text
-        bot.send_message(message.chat.id, "Введите ваш адрес: (4-я линния д.21)")
+        bot.send_message(message.chat.id, "Введите ваш адрес: (4-я линия д.21)")
         bot.register_next_step_handler(message, process_address_step)
 
     def process_address_step(message):
-        if not handele_all_message(message):
+        if not handle_all_message(message):
             bot.register_next_step_handler(message, process_address_step)
             return
         
@@ -106,9 +120,8 @@ def register_handlers(bot):
         bot.send_message(message.chat.id, "Введите ваш номер полиса: (16 цифр)")
         bot.register_next_step_handler(message, process_polis_number_step)
         
-        
     def process_polis_number_step(message):
-        if not handele_all_message(message):
+        if not handle_all_message(message):
             bot.register_next_step_handler(message, process_polis_number_step)
             return
         user_id = message.from_user.id
@@ -121,10 +134,9 @@ def register_handlers(bot):
         user_data[user_id]['polis_number'] = polis_number
         bot.send_message(message.chat.id, "Введите ваш номер телефона: (+79117990881)")
         bot.register_next_step_handler(message, process_phone_number_step)
-        
 
     def process_phone_number_step(message):
-        if not handele_all_message(message):
+        if not handle_all_message(message):
             bot.register_next_step_handler(message, process_phone_number_step)
             return
         
@@ -136,7 +148,7 @@ def register_handlers(bot):
             bot.register_next_step_handler(msg, process_phone_number_step)
             return
 
-        user_data[user_id]['phone_number'] = int(phone_number)
+        user_data[user_id]['phone_number'] = phone_number
         save_user_data(user_id)
         bot.send_message(message.chat.id, "Регистрация завершена!")
 
@@ -145,12 +157,11 @@ def register_handlers(bot):
         add_user(user_id, user['name'], user['surname'], user['address'], user['polis_number'], user['phone_number'])
         
     def is_valid_polis_number_format(polis_number):
-        return bool(re.match("^[0-9]{16,}$", polis_number))     
-        
-    def is_valid_phone_number_format(phone_number):
-        phone_number.isdigit
-        return bool(re.match("^[0-9+]{11,}$", phone_number))
+        return bool(re.match("^[0-9]{16,}$", polis_number))
     
+    def is_valid_phone_number_format(phone_number):
+        return bool(re.match("^[0-9+]{11,}$", phone_number))
+        
     def is_valid_address_format(address):
         return bool(re.match("^[A-Za-z0-9А-Яа-яЁё /,.-]{5,}$", address))
     

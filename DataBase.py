@@ -22,7 +22,7 @@ def create_table_if_not_exists():
         address NVARCHAR(255),
         polis_number BIGINT,
         phone_number BIGINT,
-        join_date  DATETIME
+        join_date DATETIME
     )
     """)
     conn.commit()
@@ -45,6 +45,14 @@ def user_exists(user_id):
     user = cursor.fetchone()
     conn.close()
     return user is not None
+
+def get_doctors():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, surname, specialization, cbinet, phone_number FROM Doctor")
+    doctors = cursor.fetchall()
+    conn.close()
+    return doctors
 
 # Создаем таблицу при запуске
 create_table_if_not_exists()
